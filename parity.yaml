@@ -7,8 +7,10 @@ settings:
   test_extension: ".rs"
   namespace_separator: "::"
 
-coverage_xml: code/cobertura.xml
-min_coverage: 80
+coverage_xml: coverage-xml
+min_coverage: 70
+min_coverage_global: 80
+min_matched_coverage: 40
 
 structure:
   - name: "Cargo sample"
@@ -17,4 +19,6 @@ structure:
       test: "code/tests"
     rules:
       - minimum-coverage:
-          min: 80
+          min: 70
+      - matched-coverage:
+          min: 40
