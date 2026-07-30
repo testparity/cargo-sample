@@ -6,51 +6,53 @@
 
 [![Parity Sample](https://github.com/testparity/cargo-sample/actions/workflows/parity.yml/badge.svg)](https://github.com/testparity/cargo-sample/actions/workflows/parity.yml)
 
-This repository is a focused Parity demo for Cargo. It intentionally separates aggregate file coverage from matching-test coverage, which is the core Parity use case.
+This repository is an end-to-end Parity demo for Cargo. CI runs the real suite, then `parity test` runs each belonging test target in isolation and builds fresh per-test coverage evidence.
 
 ## What this sample proves
 
-The checked-in language-neutral `parity-coverage.json` fixture contains per-line test attribution. Parity reads that attribution and reports both all-test file coverage and how much of each source file is covered by its matching test file.
+No coverage result is committed. `cargo-llvm-cov` emits one Cobertura report per isolated test target, and Parity normalizes those reports into `.parity/per-test` before checking them.
 
 | Source file | Matching test | All-test file coverage | Matching-test coverage | Other covering tests | Why it matters |
 | --- | --- | ---: | ---: | ---: | --- |
-| `code/src/lib.rs` | `code/tests/lib_test.rs` | 70% | 40% | 2 | Overall coverage looks acceptable, but most covered lines come from incidental tests. |
-| `code/src/discount.rs` | `code/tests/discount_test.rs` | 90% | 90% | 2 | The matching test owns nearly all of the file's coverage. |
-| Project total | - | 80% | - | - | Global coverage is healthy while one file still needs better direct tests. |
+| `src/lib.rs` | `tests/lib_test.rs` | 80% | 40% | 1 | Global coverage hides that half of the covered lines are exercised by another test target. |
+| `src/discount.rs` | `tests/discount_test.rs` | 100% | 100% | 0 | The matching test owns this file's coverage. |
+| Project total | - | 84.21% | - | - | Global coverage is healthy while one file still needs better direct tests. |
 
 Parity enforces these thresholds in `parity.yaml`:
 
-- `min_coverage_global: 80` proves the overall project can be at a release-ready level.
-- `minimum-coverage: 70` allows the intentionally weaker file to pass while still surfacing its exact percentage.
-- `matched-coverage: 40` proves Parity can distinguish the matching test from incidental coverage.
-- `coverage-attribution` is added automatically for the Parity JSON attribution fixture and reports the number of covering tests plus how many are non-matching.
+- `min_coverage_global: 80` keeps the aggregate project gate.
+- `minimum-coverage: 70` keeps every source file above the ordinary coverage floor.
+- `matched-coverage: 40` requires the belonging test to cover a meaningful portion itself.
+- `coverage-attribution` reports `2|1` for `lib.rs`: two covering tests, one of them non-matching.
 
 ## Run locally
 
-Install the public package from Packagist:
+Install the coverage tool and the public Parity package:
 
 ```bash
-composer global require testparity/parity
+cargo install cargo-llvm-cov --locked
+composer global require "testparity/parity:^1.2"
 ```
 
-Run the Parity proof:
+Run the native suite, then generate and check fresh per-test evidence:
 
 ```bash
-parity check --config=parity.yaml --format=json
+cargo test --locked
+parity test --config=parity.yaml --format=json --show-tests
 ```
 
 Expected highlights from the JSON output:
 
-- `lib.rs`: `minimum-coverage = 70%`, `matched-coverage = 40%`, `coverage-attribution = 3|2`.
-- `discount.rs`: `minimum-coverage = 90%`, `matched-coverage = 90%`, `coverage-attribution = 3|2`.
-- `global_coverage = 80` and `passed = true`.
+- `lib.rs`: `minimum-coverage = 80%`, `matched-coverage = 40%`, `coverage-attribution = 2|1`.
+- `discount.rs`: `minimum-coverage = 100%`, `matched-coverage = 100%`, `coverage-attribution = 1|0`.
+- `global_coverage = 84.21` and `passed = true`.
 
 ## CI
 
-GitHub Actions installs `testparity/parity` from Packagist, runs any native sample test step for this ecosystem, and then runs:
+GitHub Actions runs the full Cargo suite, rejects the old fixture path, clears generated evidence, and then runs:
 
 ```bash
-parity check --config=parity.yaml --format=json
+parity test --config=parity.yaml --format=json --show-tests
 ```
 
-No private token is required.
+The workflow uploads `.parity/per-test` and `parity-result.json` so every green run has inspectable proof. No private token is required.
